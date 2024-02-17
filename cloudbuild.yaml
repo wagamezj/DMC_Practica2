@@ -1,0 +1,49 @@
+options:
+  logging: CLOUD_LOGGING_ONLY  # Configuración de opciones globales, en este caso, especifica solo registros en Cloud Logging.
+
+steps:
+  #  Construir la imagen de Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY_NAME/$_IMAGE_NAME:latest', '.'] # Argumentos para la construccion y pasos consola
+
+  #  Subir la imagen de Docker a Container Registry en GCP
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY_NAME/$_IMAGE_NAME:latest']
+
+  #  Desplegar la imagen en Cloud Run el servicio similar a codebuild pero en GCP
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '$_CLOUD_RUN_SERVICE'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY_NAME/$_IMAGE_NAME:latest'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+  #  Verificar y probar el servicio de Cloud Run desplegado
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        set -e  # Detener la ejecución en caso de cualquier error
+        gcloud run services describe $_CLOUD_RUN_SERVICE --region=$_REGION --platform=managed --format='value(status.url)'
+        echo "Executing Cloud Run service at https://$_CLOUD_RUN_SERVICE-6ks3mtyyxq-uc.a.run.app/$_PIPELINE_TYPE" &&
+        curl "https://$_CLOUD_RUN_SERVICE-6ks3mtyyxq-uc.a.run.app/$_PIPELINE_TYPE"
+
+substitutions:
+  # Definición de sustituciones para variables utilizadas en el archivo
+  _PROJECT_ID: 'astral-reef-391421'
+  _REGION: 'us-central1'
+  _REPOSITORY_NAME: 'mle-template'
+  _IMAGE_NAME: 'mle-template'
+  _CLOUD_RUN_SERVICE: 'mle-template-service'  # Servicios que active en GCP
+  _PIPELINE_TYPE: 'train_pipeline'
+
+images:
+  # Definición de imágenes utilizadas en el proceso
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY_NAME/$_IMAGE_NAME:latest'
+
+

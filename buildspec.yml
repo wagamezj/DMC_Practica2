@@ -1,0 +1,35 @@
+# Construccion del Build Stage esta se agrega a la ruta root del repositorio  configuro los pasos a seguir para le deploy esto lo hacemos en la etapa 3 del proceso
+# despues de un disparador basado en las cuatro instrucciones , todo lo que se hace en terminal se podria agregar en secuencias
+
+version: 0.2   # Version de codebuild
+phases:  
+  pre_build: # Etapa preconstruccion 
+    commands:
+      - echo Logging in to Amazon ECR...  # Prin para saber el loggueo
+      - echo $CODEBUILD_SOURCE_VERSION    # Print para la version
+      - echo "Retrieving ECR login password"
+      - PASSWORD=$(aws ecr get-login-password --region $AWS_DEFAULT_REGION)  # Guardamos el password y generamos el logueo mediante uso de variables
+      - echo "Logging into Docker with ECR credentials"   # Se completo el logue
+      - REPOSITORY_URI=533267339745.dkr.ecr.us-east-1.amazonaws.com/my-predict-api # Se define el URI del repositorio donde se guardan las imagenes  y se guarda con una variable
+      - docker login --username AWS --password $PASSWORD $REPOSITORY_URI:latest  # Hago el logguin en docker 
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)   # Prino de la versiond e codebuild
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}') # El tag de la imagen latest para identificarla 
+  build:
+    commands:
+      - echo Build started on `date` # Imprimir
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest app/.    # Genero la construiccion del docker/.
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG # Hacemos el taguero
+  post_build:
+    commands:
+      - echo Build completed on `date` 
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:$IMAGE_TAG # Se hace el push de la imagen tageada 
+      - echo Writing image definitions file... # print aviso que se estan haciendo las configuraciones 
+      - printf '{"AWSEBDockerrunVersion":"1","Image":{"Name":"%s","Update":"true"},"Ports":[{"ContainerPort":8000}]}' $REPOSITORY_URI:$IMAGE_TAG > Dockerrun.aws.json # Se guarda el diccionario en el docker ran
+      - cat Dockerrun.aws.json # Se Crea el archivo
+artifacts:
+  files: Dockerrun.aws.json # Se guarda como un artefacto
+
+
+  # Todo este archivo se pasa el beanstalk para poder actualizar la imagen y crear el punto http 
